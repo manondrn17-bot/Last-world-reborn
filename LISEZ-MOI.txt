@@ -1,0 +1,23 @@
+LAST WORLD: REBORN — prototype 0.1
+====================================
+
+JOUER SUR ORDINATEUR
+1. Décompressez le dossier.
+2. Ouvrez index.html dans un navigateur récent.
+3. Touches : ZQSD ou flèches pour bouger, E récolter, B construire, ESPACE attaquer.
+
+JOUER SUR ANDROID
+1. Pour tester : transférez index.html et ouvrez-le dans Chrome (selon les réglages Android, l'ouverture locale peut être limitée).
+2. Pour installer comme une application : hébergez gratuitement les fichiers sur un site HTTPS (par exemple GitHub Pages).
+3. Ouvrez l'adresse du site dans Chrome Android > menu ⋮ > "Installer l'application" ou "Ajouter à l'écran d'accueil".
+
+COMMANDES TACTILES
+Joystick à gauche ; Récolter, Base, Attaquer et Soin à droite.
+
+OBJECTIF
+Récolter 5 bois, construire un abri, collecter des cristaux et survivre aux créatures.
+La progression est sauvegardée localement sur l'appareil (localStorage).
+
+COÛT
+Le prototype et les outils sont gratuits. L'hébergement statique peut être gratuit.
+Ce prototype ne contient PAS encore de serveur multijoueur ni de paiements : ne le présentez pas comme une version commerciale finale.

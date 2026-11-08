@@ -1,0 +1,9 @@
+{
+  "name": "LAST WORLD: REBORN",
+  "short_name": "LAST WORLD",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#101b2d",
+  "theme_color": "#101b2d",
+  "description": "Mini jeu de survie gratuit"
+}

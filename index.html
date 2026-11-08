@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#101b2d">
+<meta name="description" content="LAST WORLD: REBORN — mini jeu de survie gratuit jouable sur navigateur et mobile.">
+<link rel="manifest" href="manifest.webmanifest">
+<title>LAST WORLD: REBORN</title>
+<style>
+:root{color-scheme:dark;--bg:#101b2d;--panel:#17283e;--line:#38516c;--gold:#ffd166;--mint:#70e1bd}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:system-ui,Segoe UI,sans-serif;color:#f4f7fb;touch-action:none}
+#game{display:block;width:100vw;height:100vh;background:#263e43}
+.hud{position:fixed;z-index:2;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
+.panel{background:#101b2de8;border:1px solid #55708a;border-radius:13px;padding:8px 11px;box-shadow:0 4px 18px #0005;font-size:13px}
+.stats{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.stat b{color:var(--gold)}
+#message{position:fixed;z-index:3;left:50%;top:76px;transform:translateX(-50%);background:#101b2df0;border:1px solid var(--line);border-radius:12px;padding:9px 14px;font-size:13px;text-align:center;max-width:90vw;opacity:0;transition:opacity .2s;pointer-events:none}
+#message.show{opacity:1}
+#help{position:fixed;bottom:12px;left:12px;max-width:330px;line-height:1.35}
+#actions{position:fixed;right:14px;bottom:18px;display:grid;grid-template-columns:repeat(2,64px);gap:9px}
+.ctrl{width:64px;height:64px;border-radius:50%;border:1px solid #91a9be;background:#13263ddd;color:white;font-weight:800;font-size:12px;box-shadow:0 4px 12px #0006;touch-action:none}
+.ctrl:active{background:#315b6b}
+#stick{position:fixed;left:18px;bottom:22px;width:124px;height:124px;border-radius:50%;background:#14283ab8;border:1px solid #8196a8;touch-action:none}
+#knob{position:absolute;left:38px;top:38px;width:46px;height:46px;border-radius:50%;background:#dce9f3;border:3px solid #648096;opacity:.9}
+#overlay{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:linear-gradient(#0c1724dd,#0c1724f2);padding:20px}
+.card{width:min(520px,100%);background:#17283e;border:1px solid #4d6b87;border-radius:22px;padding:24px;box-shadow:0 15px 55px #0008}
+h1{margin:0 0 6px;font-size:clamp(28px,7vw,42px);letter-spacing:1px}h1 span{color:var(--gold)}
+.sub{color:#b7c9d9;margin:0 0 18px}.primary{border:0;border-radius:12px;background:var(--gold);color:#17202b;font-weight:900;padding:13px 20px;font-size:16px;width:100%;margin-top:10px}
+.small{font-size:12px;color:#b7c9d9;line-height:1.45}.objective{background:#102035;border-radius:12px;padding:12px;margin:14px 0}
+@media(min-width:800px){#stick,#actions{opacity:.75}#help{bottom:12px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="hud">
+ <div class="panel stats">
+  <span class="stat">❤️ <b id="hp">100</b></span>
+  <span class="stat">🪵 <b id="wood">0</b></span>
+  <span class="stat">💎 <b id="crystal">0</b></span>
+  <span class="stat">⭐ <b id="score">0</b></span>
+ </div>
+ <div class="panel">JOUR <b id="day">1</b></div>
+</div>
+<div id="message"></div>
+<div id="help" class="panel small">PC : ZQSD / flèches pour bouger · E pour récolter · B pour construire.<br>Mobile : joystick + boutons d'action.</div>
+<div id="stick"><div id="knob"></div></div>
+<div id="actions">
+ <button class="ctrl" id="gather">RÉCOLTER</button>
+ <button class="ctrl" id="build">BASE</button>
+ <button class="ctrl" id="attack">ATTAQUER</button>
+ <button class="ctrl" id="heal">SOIN</button>
+</div>
+<div id="overlay">
+ <div class="card">
+  <h1>LAST WORLD<span>: REBORN</span></h1>
+  <p class="sub">Survis. Récolte. Construis. Défends ton île.</p>
+  <div class="objective">
+   <b>🎯 Première mission</b>
+   <p style="margin:7px 0 0">Récolte 5 bois, construis un abri, puis repousse les créatures qui rôdent sur l'île.</p>
+  </div>
+  <p class="small">Prototype gratuit — version 0.1. Tout est sauvegardé localement sur cet appareil. Aucun compte ni achat requis.</p>
+  <button class="primary" id="start">JOUER</button>
+ </div>
+</div>
+<script>
+(()=>{
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+let W=innerWidth,H=innerHeight,dpr=Math.min(devicePixelRatio||1,2);
+function resize(){W=innerWidth;H=innerHeight;canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}
+addEventListener('resize',resize);resize();
+const world={w:1800,h:1300};
+let player={x:900,y:650,r:15,hp:100,wood:0,crystal:0,score:0,speed:210};
+let trees=[],gems=[],slimes=[],base=null,day=1,started=false,last=0,keys={},joy={x:0,y:0},gameOver=false;
+const saved=(()=>{try{return JSON.parse(localStorage.getItem('lastworld-save')||'null')}catch(e){return null}})();
+function rand(a,b){return a+Math.random()*(b-a)}
+function spawn(){
+ trees=[];gems=[];slimes=[];
+ for(let i=0;i<42;i++)trees.push({x:rand(90,world.w-90),y:rand(90,world.h-90),hp:3,alive:true});
+ for(let i=0;i<19;i++)gems.push({x:rand(70,world.w-70),y:rand(70,world.h-70),taken:false});
+ for(let i=0;i<7;i++)slimes.push({x:rand(150,world.w-150),y:rand(150,world.h-150),hp:3,r:16,alive:true,hit:0});
+}
+spawn();
+if(saved){Object.assign(player,saved.player||{});day=saved.day||1;base=saved.base||null;trees=saved.trees||trees;gems=saved.gems||gems;slimes=saved.slimes||slimes}
+const $=id=>document.getElementById(id);
+function say(s){$('message').textContent=s;$('message').classList.add('show');clearTimeout(say.t);say.t=setTimeout(()=>$('message').classList.remove('show'),2100)}
+function save(){try{localStorage.setItem('lastworld-save',JSON.stringify({player,day,base,trees,gems,slimes}))}catch(e){}}
+function hud(){$('hp').textContent=Math.max(0,Math.ceil(player.hp));$('wood').textContent=player.wood;$('crystal').textContent=player.crystal;$('score').textContent=player.score;$('day').textContent=day}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function cam(){return{x:clamp(player.x-W/2,0,world.w-W),y:clamp(player.y-H/2,0,world.h-H)}}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function nearest(arr,max,filter=()=>true){let best=null,bd=max;for(const o of arr)if(filter(o)){let d=dist(player,o);if(d<bd){best=o;bd=d}}return best}
+function gather(){let t=nearest(trees,58,o=>o.alive);if(t){t.hp--;if(t.hp<=0){t.alive=false;player.wood+=3;player.score+=15;say('+3 bois récoltés')}else say('Arbre entamé… encore un coup !');save();hud();return}
+let g=nearest(gems,55,o=>!o.taken);if(g){g.taken=true;player.crystal++;player.score+=30;say('+1 cristal rare !');save();hud()}else say('Approche-toi d’un arbre ou d’un cristal.')}
+function build(){if(base){say('Ton abri est déjà construit.');return}if(player.wood<5){say('Il te faut 5 bois pour construire.');return}player.wood-=5;base={x:player.x,y:player.y};player.score+=100;say('🏠 Abri construit ! Mission accomplie.');save();hud()}
+function attack(){let s=nearest(slimes,66,o=>o.alive);if(!s){say('Aucune créature à portée.');return}s.hp--;s.hit=.2;player.score+=10;if(s.hp<=0){s.alive=false;player.crystal++;player.score+=40;say('Créature vaincue ! +1 cristal')}else say('Touché ! La créature riposte…');save();hud()}
+function heal(){if(player.hp>=100){say('Tes points de vie sont déjà au maximum.');return}if(player.crystal<1){say('Il faut 1 cristal pour se soigner.');return}player.crystal--;player.hp=Math.min(100,player.hp+35);say('+35 points de vie');save();hud()}
+$('gather').onclick=gather;$('build').onclick=build;$('attack').onclick=attack;$('heal').onclick=heal;
+$('start').onclick=()=>{$('overlay').style.display='none';started=true;say('Explore l’île et récolte 5 bois !')};
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))e.preventDefault();if(e.key.toLowerCase()==='e')gather();if(e.key.toLowerCase()==='b')build();if(e.key.toLowerCase()===' ')attack()});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+const stick=$('stick'),knob=$('knob');let pointer=null;
+stick.addEventListener('pointerdown',e=>{pointer=e.pointerId;stick.setPointerCapture(pointer);moveJoy(e)});
+stick.addEventListener('pointermove',e=>{if(e.pointerId===pointer)moveJoy(e)});
+function moveJoy(e){let r=stick.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),m=Math.hypot(x,y),lim=39;if(m>lim){x=x/m*lim;y=y/m*lim}joy.x=x/lim;joy.y=y/lim;knob.style.transform=`translate(${x}px,${y}px)`}
+function endJoy(){pointer=null;joy.x=joy.y=0;knob.style.transform='translate(0,0)'}
+stick.addEventListener('pointerup',endJoy);stick.addEventListener('pointercancel',endJoy);
+function update(dt){
+ if(!started||gameOver)return;
+ let x=(keys['d']||keys['arrowright']?1:0)-(keys['q']||keys['a']||keys['arrowleft']?1:0)+joy.x;
+ let y=(keys['s']||keys['arrowdown']?1:0)-(keys['z']||keys['w']||keys['arrowup']?1:0)+joy.y;
+ let m=Math.hypot(x,y);if(m>1){x/=m;y/=m}
+ player.x=clamp(player.x+x*player.speed*dt,25,world.w-25);player.y=clamp(player.y+y*player.speed*dt,25,world.h-25);
+ for(let s of slimes)if(s.alive){let d=dist(player,s);if(d<260){s.x+=(player.x-s.x)/Math.max(d,1)*65*dt;s.y+=(player.y-s.y)/Math.max(d,1)*65*dt}if(d<player.r+s.r+3){player.hp-=13*dt;if(player.hp<=0){player.hp=0;gameOver=true;$('overlay').style.display='flex';$('overlay').querySelector('h1').innerHTML='FIN DE <span>PARTIE</span>';$('overlay').querySelector('.sub').textContent='Les créatures ont eu raison de toi. Réessaie !';$('start').textContent='RECOMMENCER';$('start').onclick=()=>{player.hp=100;player.x=900;player.y=650;gameOver=false;$('overlay').style.display='none';$('start').onclick=null;started=true};}}}
+ if(base&&Math.random()<dt*.025){day++;say('🌙 Un nouveau jour commence !')}
+ hud();
+}
+function draw(){
+ ctx.clearRect(0,0,W,H);let c=cam();ctx.save();ctx.translate(-c.x,-c.y);
+ ctx.fillStyle='#31564d';ctx.fillRect(0,0,world.w,world.h);
+ // terrain patches
+ for(let i=0;i<110;i++){let x=(i*173)%world.w,y=(i*293)%world.h;ctx.fillStyle=i%2?'#386052':'#3b6656';ctx.beginPath();ctx.ellipse(x,y,randStatic(i,18,50),randStatic(i+2,10,28),0,0,Math.PI*2);ctx.fill()}
+ // shore
+ ctx.strokeStyle='#8ac5b0';ctx.lineWidth=24;ctx.strokeRect(12,12,world.w-24,world.h-24);
+ for(let t of trees)if(t.alive){ctx.fillStyle='#684a35';ctx.fillRect(t.x-5,t.y,10,20);ctx.fillStyle='#1b7a55';ctx.beginPath();ctx.arc(t.x,t.y-5,22,0,Math.PI*2);ctx.fill();ctx.fillStyle='#31966a';ctx.beginPath();ctx.arc(t.x-8,t.y-10,12,0,Math.PI*2);ctx.fill()}
+ for(let g of gems)if(!g.taken){ctx.fillStyle='#6de8ef';ctx.beginPath();ctx.moveTo(g.x,g.y-12);ctx.lineTo(g.x+9,g.y);ctx.lineTo(g.x,g.y+13);ctx.lineTo(g.x-9,g.y);ctx.closePath();ctx.fill();ctx.strokeStyle='#d6ffff';ctx.stroke()}
+ if(base){ctx.fillStyle='#9c6a3f';ctx.fillRect(base.x-27,base.y-23,54,46);ctx.fillStyle='#d8b078';ctx.beginPath();ctx.moveTo(base.x-34,base.y-22);ctx.lineTo(base.x,base.y-49);ctx.lineTo(base.x+34,base.y-22);ctx.fill();ctx.fillStyle='#283b4a';ctx.fillRect(base.x-7,base.y+3,14,20)}
+ for(let s of slimes)if(s.alive){ctx.fillStyle=s.hit>0?'#fff':'#a66be8';s.hit=Math.max(0,s.hit-.02);ctx.beginPath();ctx.ellipse(s.x,s.y,s.r,s.r*.78,0,Math.PI,0);ctx.lineTo(s.x+s.r,s.y);ctx.fill();ctx.fillStyle='#fff';ctx.fillRect(s.x-7,s.y-7,4,5);ctx.fillRect(s.x+4,s.y-7,4,5)}
+ // player
+ ctx.fillStyle='#142638';ctx.beginPath();ctx.ellipse(player.x,player.y+12,13,6,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#ffd166';ctx.beginPath();ctx.arc(player.x,player.y,14,0,Math.PI*2);ctx.fill();ctx.fillStyle='#263b51';ctx.fillRect(player.x-5,player.y-3,3,3);ctx.fillRect(player.x+3,player.y-3,3,3);
+ ctx.restore();
+}
+function randStatic(n,a,b){let v=Math.sin(n*127.1)*43758.5453;v-=Math.floor(v);return a+v*(b-a)}
+function loop(t){let dt=Math.min((t-last)/1000||0,.04);last=t;update(dt);draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});setInterval(save,5000);hud();
+})();
+if ('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+</script>
+</body>
+</html>
